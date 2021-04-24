@@ -17,8 +17,11 @@ SPP_X = c('SATR')
 library(tidyverse)
 library(plotly)
 
-#Set working directory
+#Set working directory - working data should be set automatically if you're 
+#using the Git version
 setwd('~/NOAA Lab Assistant/R code')
+
+
 
 #data is a flat file, meaning each line is an entry of a fish
 #******Update this file with the newest version*****
@@ -53,10 +56,10 @@ PISCO <- PISCO %>%
     (depth >= 7.5 & depth <= 12.4) ~ 10,
     (depth >= 12.5 & depth <= 17.4) ~ 15,
     (depth >= 17.5) ~ 20))
-    
+
 #still need to remove NAs?
 #PISCO <- PISCO[-which(is.na(
- # PISCO$campus)),]
+# PISCO$campus)),]
 
 ##visualize data 
 PISCO_SPP_X <- subset(PISCO, PISCO$classcode == SPP_X)
@@ -69,30 +72,113 @@ PISCO$count_spp_x <- ifelse(PISCO$classcode != SPP_X,
 
 #optional: rearrange columns to put new column next to count
 
-PISCO <- subset(PISCO, select = c(campus:count, 
-                   count_spp_x, fish_tl:depth_bin_m))
+#PISCO <- subset(PISCO, select = c(campus:count, 
+#                   count_spp_x, fish_tl:depth_bin_m))
 
 #for kelp rf: find average number of kelp rockfish 
 #per year by campus (in BOT and MID levels)
 
 #campus_mean_count <- PISCO %>%
-  # subset(PISCO$level == c("MID","BOT"),) %>%
-  # group_by(year, campus) %>%
-  # summarize(mean = mean(count_spp_x))
+# subset(PISCO$level == c("MID","BOT"),) %>%
+# group_by(year, campus) %>%
+# summarize(mean = mean(count_spp_x))
 
 #use visibility and/or 2*2*30 m transect structure
 #to estimate transect volume
 
 PISCO$vol.transect <- ifelse(PISCO$vis >= 2 | is.na(PISCO$vis), 
                              120, PISCO$vis * 60)
-  
-  
+
+
+#--------------------------------------------------------------------------------
+#Melissa script additions
+##check to see how many transects there are
+test.PISCO  <- PISCO %>%
+  select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy,) %>%
+  unique()
+
+#plot visibility by surge - don't get much
+bb = ggplot(test.PISCO, aes(surge, vis)) + geom_boxplot()
+x11(); bb
+
+#a lot of missing data
+summary(as.factor(test.PISCO$pctcnpy))
+summary(as.factor(test.PISCO$surge))
+
+#look at levels by campus and site
+with(test.PISCO, table(campus, level))
+
+#get all unique transects
+PISCOa  <- PISCO %>%
+  select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy) %>%
+  unique()
+with(PISCOa, table(campus,level))
+
+#get sites with canopy mid and compare the lenght distributions to canopy and mid
+cnmd.sites = subset(PISCOa, level=='CNMD' & campus=='UCSB')
+PISCOb = subset(PISCOa, site %in% cnmd.sites$site)
+PISCOb = droplevels(PISCOb)
+with(PISCOb, table(site, level))
+
+
+#Expand the lenghts by the count rows
+#can double check the result by getting the lenght of the sum of the counts
+PISCO_SPP_X_lengths = PISCO_SPP_X %>%
+  uncount(weights = count, .remove=FALSE) %>%
+  select(year, campus, method, month, day, site, zone, level,
+         transect, classcode, fish_tl, depth)
+
+
+#plot lengths by level and campus
+cc = ggplot(PISCO_SPP_X_lengths, aes(level, fish_tl, colour=level)) + geom_boxplot() + facet_wrap(~campus)
+x11();cc
+
+#look at just the canopy mid lengths
+PISCO_SPP_X_CNMD = subset(PISCO_SPP_X_lengths, site %in% PISCOb$site & campus=="UCSB")
+PISCO_SPP_X_CNMD = droplevels(PISCO_SPP_X_CNMD)
+dd = ggplot(PISCO_SPP_X_CNMD, aes(level, fish_tl, colour=level)) + geom_boxplot() + facet_wrap(~campus)
+x11();dd
+
+##keep canopy mid - the distribution of lengths is similar to the mid
+
+
+#look at length distributions of fish by level and site
+##FIRST need to expand the lengths because there's a count column for how many
+##fish were observed in that length bin
+
+
+ee = ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, fill = level)) + 
+  geom_density(alpha=0.3) + 
+  facet_wrap(~campus) 
+x11();ee
+
+#look at lenght distributions of fish by level and site
+ff = ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, fill = as.factor(month))) + 
+  geom_density(alpha=0.3) + 
+  facet_wrap(~as.factor(level)) 
+x11();ff
+
+
+#looks like we'll want to cut the lengths off at 15-20 at least. for the production
+#model we only want to include mature fish 
+
+
+
+
+#are there sites where the species was never observed?
+length(unique(PISCO$site))
+length(unique(PISCO_SPP_X$site))
+
+#Remove sites that never saw specie of interest
+PISCO = droplevels(subset(PISCO, site %in% PISCO_SPP_X$site))
+
 #create df to combine BOT and MID counts, adding an
-#ntransect column to account for the paired BOT/MID
+#ntransect column to the paired BOT/MID
 #transects (effort column)
 
+##add back in cnmd here
 PISCO.aggregate.transect <- PISCO %>%
-  subset(level %in% c("BOT", "MID")) %>%
+  subset(level %in% c("BOT", "MID", "CNMD")) %>%
   group_by(campus, site, year, month, day, zone, transect, level) %>%
   summarise(SATRtot = sum(count_spp_x), 
             ntransect = 1, 
@@ -104,7 +190,7 @@ PISCO.aggregate.transect <- PISCO %>%
             CPUE.tr = (sum.SATRtot / sum.ntransect), 
             CPUE.vol = (sum.SATRtot / sum.vol),
             pctcnpy = mean(pctcnpy))
-  
+
 
 #raw average count by year, with ave CPUE and transect count columns
 PISCO.year.mean <- PISCO.aggregate.transect %>%
@@ -115,40 +201,26 @@ PISCO.year.mean <- PISCO.aggregate.transect %>%
             CPUE.vol = mean(CPUE.vol),
             pctcnpy = mean(pctcnpy))
 
-#group sites
-south.ca.yr.mean <- PISCO.year.mean %>%
-  subset(site %in% c("ANACAPA_ADMIRALS_CEN", "ANACAPA_ADMIRALS_E","ANACAPA_ADMIRALS_W","ANACAPA_BLACK_SEA_BASS","ANACAPA_EAST_FISH_CAMP_CEN","ANACAPA_EAST_FISH_CAMP_E","ANACAPA_EAST_FISH_CAMP_W","ANACAPA_EAST_ISLE_CEN",
-              "ANACAPA_EAST_ISLE_E","ANACAPA_EAST_ISLE_W","ANACAPA_LIGHTHOUSE_REEF_CEN","ANACAPA_LIGHTHOUSE_REEF_E",
-              "ANACAPA_LIGHTHOUSE_REEF_W","ANACAPA_MIDDLE_ISLE_CEN","ANACAPA_MIDDLE_ISLE_E","ANACAPA_MIDDLE_ISLE_W",
-              "ANACAPA_WEST_ISLE_CEN","ANACAPA_WEST_ISLE_E","ANACAPA_WEST_ISLE_W","CAT_BLUE_CAVERN","CAT_INTAKE_PIPES","CAT_PUMPERNICKEL",
-              "COJO_E","COJO_W","COUNTY_LINE","EL_MATADOR","HORSESHOE_REEF_E","HORSESHOE_REEF_W","IV_REEF_E","IV_REEF_W","LEO_CARRILLO",
-              "LITTLE_DUME","NAPLES_CEN","NAPLES_E","NAPLES_W","POINT_DUME","SBI_ARCH_POINT_CEN","SBI_ARCH_POINT_N","SBI_ARCH_POINT_S","SBI_CAT_CANYON_CEN","SBI_CAT_CANYON_W","SBI_GRAVEYARD_CANYON_CEN","SBI_GRAVEYARD_CANYON_N",
-              "SBI_SOUTHEAST_REEF_CEN","SBI_SOUTHEAST_REEF_S","SBI_SOUTHEAST_SEA_LION_CEN","SBI_SOUTHEAST_SEA_LION_N","SBI_WEBSTERS_ARCH_CEN",
-              "SBI_WEBSTERS_ARCH_E","SBI_WEBSTERS_ARCH_N","SCI_CAVERN_POINT_E","SCI_CAVERN_POINT_W","SCI_COCHE_POINT_E","SCI_COCHE_POINT_W","SCI_FORNEY_E","SCI_FORNEY_W","SCI_GULL_ISLE_E","SCI_GULL_ISLE_W","SCI_HAZARDS_CEN","SCI_HAZARDS_E","SCI_HAZARDS_W","SCI_LITTLE_SCORPION_E","SCI_LITTLE_SCORPION_W",
-              "SCI_PAINTED_CAVE_CEN","SCI_PAINTED_CAVE_E","SCI_PAINTED_CAVE_W","SCI_PELICAN_CEN","SCI_PELICAN_E","SCI_PELICAN_FAR_WEST","SCI_PELICAN_W","SCI_POTATO_PASTURE_E","SCI_POTATO_PASTURE_W",
-              "SCI_SAN_PEDRO_POINT_E","SCI_SAN_PEDRO_POINT_W","SCI_SCORPION_ANCHORAGE","SCI_SCORPION_E","SCI_SCORPION_W","SCI_VALLEY_CEN","SCI_VALLEY_E",
-              "SCI_VALLEY_W","SCI_YELLOWBANKS_CEN","SCI_YELLOWBANKS_E","SCI_YELLOWBANKS_W","SMI_BAY_POINT","SMI_CROOK_POINT_E","SMI_CROOK_POINT_W","SMI_CUYLER_E","SMI_CUYLER_W",
-              "SMI_HARE_ROCK","SMI_HARRIS_PT_RESERVE_E","SMI_HARRIS_PT_RESERVE_W","SMI_PRINCE_ISLAND_CEN",
-              "SMI_PRINCE_ISLAND_N","SMI_TYLER_BIGHT_E","SMI_TYLER_BIGHT_W","SRI_BEACON_REEF_E","SRI_BEACON_REEF_W","SRI_BEE_ROCK_E","SRI_BEE_ROCK_W","SRI_CARRINGTON_CEN","SRI_CARRINGTON_E","SRI_CARRINGTON_W","SRI_CHICKASAW_E","SRI_CHICKASAW_W","SRI_CLUSTER_POINT_N","SRI_CLUSTER_POINT_S","SRI_FORD_POINT","SRI_JOHNSONS_LEE_NORTH_E",
-              "SRI_JOHNSONS_LEE_NORTH_W","SRI_JOHNSONS_LEE_SOUTH_E","SRI_JOHNSONS_LEE_SOUTH_W","SRI_JOLLA_VIEJA_E", "SRI_JOLLA_VIEJA_W","SRI_MONACOS_E","SRI_MONACOS_W","SRI_RODES_REEF_E","SRI_RODES_REEF_W",
-              "SRI_SOUTH_POINT_E","SRI_SOUTH_POINT_W","SRI_TRANCION_CANYON_E","SRI_TRANCION_CANYON_W"))
 
-north.ca.yr.mean <- PISCO.year.mean %>%
-  subset(!site %in% c("ANACAPA_ADMIRALS_CEN", "ANACAPA_ADMIRALS_E","ANACAPA_ADMIRALS_W","ANACAPA_BLACK_SEA_BASS","ANACAPA_EAST_FISH_CAMP_CEN","ANACAPA_EAST_FISH_CAMP_E","ANACAPA_EAST_FISH_CAMP_W","ANACAPA_EAST_ISLE_CEN",
-                     "ANACAPA_EAST_ISLE_E","ANACAPA_EAST_ISLE_W","ANACAPA_LIGHTHOUSE_REEF_CEN","ANACAPA_LIGHTHOUSE_REEF_E",
-                     "ANACAPA_LIGHTHOUSE_REEF_W","ANACAPA_MIDDLE_ISLE_CEN","ANACAPA_MIDDLE_ISLE_E","ANACAPA_MIDDLE_ISLE_W",
-                     "ANACAPA_WEST_ISLE_CEN","ANACAPA_WEST_ISLE_E","ANACAPA_WEST_ISLE_W","CAT_BLUE_CAVERN","CAT_INTAKE_PIPES","CAT_PUMPERNICKEL",
-                     "COJO_E","COJO_W","COUNTY_LINE","EL_MATADOR","HORSESHOE_REEF_E","HORSESHOE_REEF_W","IV_REEF_E","IV_REEF_W","LEO_CARRILLO",
-                     "LITTLE_DUME","NAPLES_CEN","NAPLES_E","NAPLES_W","POINT_DUME","SBI_ARCH_POINT_CEN","SBI_ARCH_POINT_N","SBI_ARCH_POINT_S","SBI_CAT_CANYON_CEN","SBI_CAT_CANYON_W","SBI_GRAVEYARD_CANYON_CEN","SBI_GRAVEYARD_CANYON_N",
-                     "SBI_SOUTHEAST_REEF_CEN","SBI_SOUTHEAST_REEF_S","SBI_SOUTHEAST_SEA_LION_CEN","SBI_SOUTHEAST_SEA_LION_N","SBI_WEBSTERS_ARCH_CEN",
-                     "SBI_WEBSTERS_ARCH_E","SBI_WEBSTERS_ARCH_N","SCI_CAVERN_POINT_E","SCI_CAVERN_POINT_W","SCI_COCHE_POINT_E","SCI_COCHE_POINT_W","SCI_FORNEY_E","SCI_FORNEY_W","SCI_GULL_ISLE_E","SCI_GULL_ISLE_W","SCI_HAZARDS_CEN","SCI_HAZARDS_E","SCI_HAZARDS_W","SCI_LITTLE_SCORPION_E","SCI_LITTLE_SCORPION_W",
-                     "SCI_PAINTED_CAVE_CEN","SCI_PAINTED_CAVE_E","SCI_PAINTED_CAVE_W","SCI_PELICAN_CEN","SCI_PELICAN_E","SCI_PELICAN_FAR_WEST","SCI_PELICAN_W","SCI_POTATO_PASTURE_E","SCI_POTATO_PASTURE_W",
-                     "SCI_SAN_PEDRO_POINT_E","SCI_SAN_PEDRO_POINT_W","SCI_SCORPION_ANCHORAGE","SCI_SCORPION_E","SCI_SCORPION_W","SCI_VALLEY_CEN","SCI_VALLEY_E",
-                     "SCI_VALLEY_W","SCI_YELLOWBANKS_CEN","SCI_YELLOWBANKS_E","SCI_YELLOWBANKS_W","SMI_BAY_POINT","SMI_CROOK_POINT_E","SMI_CROOK_POINT_W","SMI_CUYLER_E","SMI_CUYLER_W",
-                     "SMI_HARE_ROCK","SMI_HARRIS_PT_RESERVE_E","SMI_HARRIS_PT_RESERVE_W","SMI_PRINCE_ISLAND_CEN",
-                     "SMI_PRINCE_ISLAND_N","SMI_TYLER_BIGHT_E","SMI_TYLER_BIGHT_W","SRI_BEACON_REEF_E","SRI_BEACON_REEF_W","SRI_BEE_ROCK_E","SRI_BEE_ROCK_W","SRI_CARRINGTON_CEN","SRI_CARRINGTON_E","SRI_CARRINGTON_W","SRI_CHICKASAW_E","SRI_CHICKASAW_W","SRI_CLUSTER_POINT_N","SRI_CLUSTER_POINT_S","SRI_FORD_POINT","SRI_JOHNSONS_LEE_NORTH_E",
-                     "SRI_JOHNSONS_LEE_NORTH_W","SRI_JOHNSONS_LEE_SOUTH_E","SRI_JOHNSONS_LEE_SOUTH_W","SRI_JOLLA_VIEJA_E", "SRI_JOLLA_VIEJA_W","SRI_MONACOS_E","SRI_MONACOS_W","SRI_RODES_REEF_E","SRI_RODES_REEF_W",
-                     "SRI_SOUTH_POINT_E","SRI_SOUTH_POINT_W","SRI_TRANCION_CANYON_E","SRI_TRANCION_CANYON_W"))
+
+
+
+#Look at which campuses sample which sites
+with(PISCO, table(site, campus))
+#read in pisco site table
+site.location = read.csv('PISCO_kelpforest_site_table.1.2.csv')
+sites = site.location %>%
+  select(site, year, latitude, longitude, MPA_Name, site_designation, site_status) %>%
+  unique()
+
+#add in location data
+PISCO.aggregate.transect = left_join(PISCO.aggregate.transect, sites, by=c("year", "site"))
+
+PISCO.aggregate.transect = PISCO.aggregate.transect %>%
+  mutate(Region = case_when(latitude > 34.4486 ~ "NCA",
+                            TRUE ~ "SCA"))
+#make sure they were all assigned                          
+summary(as.factor(PISCO.aggregate.transect$Region))
 
 
 #cpue by year only
@@ -159,6 +231,65 @@ PISCO.mean <- PISCO.year.mean <- PISCO.aggregate.transect %>%
             CPUE.tr = mean(CPUE.tr), 
             CPUE.vol = mean(CPUE.vol),
             pctcnpy = mean(pctcnpy))
+
+
+##Look at trends north and south of Conception
+PISCO.Region.mean = PISCO.aggregate.transect %>%
+  group_by(year, Region) %>%
+  summarize(mean.count = mean(sum.SATRtot), 
+            ntransect = sum(sum.ntransect),
+            CPUE.tr = mean(CPUE.tr), 
+            CPUE.vol = mean(CPUE.vol),
+            pctcnpy = mean(pctcnpy))
+
+ff = ggplot(PISCO.Region.mean, aes(year, CPUE.tr, colour = Region)) + geom_line(lwd=1.5)
+x11(); ff
+
+
+
+##Look at trends by level
+##will have to make a new table for this becuase aggregate doesn't have the 
+##levels
+PISCO.level.mean = PISCO.aggregate.transect %>%
+  group_by(year, level) %>%
+  summarize(mean.count = mean(sum.SATRtot), 
+            ntransect = sum(sum.ntransect),
+            CPUE.tr = mean(CPUE.tr), 
+            CPUE.vol = mean(CPUE.vol),
+            pctcnpy = mean(pctcnpy))
+
+ii = ggplot(PISCO.level.mean, aes(year, CPUE.tr, colour = level)) + geom_line(lwd=1.5)
+x11(); ii
+
+
+###How different are the bottom and mid paired transects in terms of counts
+#think you can do this with gather
+#First need to collapse the counts and
+
+PISCO_SPP_counts = PISCO_SPP_X %>%
+  filter(level !='CAN') %>%
+  group_by(year, campus, month, day, site, zone, transect, level) %>%
+  summarise(SumCount = sum(count))
+
+PISCO_SPP_pairs = PISCO_SPP_counts %>%
+  group_by(year, month, day, site, zone,  transect) %>%
+  spread(level,SumCount)
+
+#plot bottom vs mid
+
+hh = ggplot(PISCO_SPP_pairs, aes(BOT, MID)) + 
+  geom_jitter(alpha=0.3)
+x11(); hh
+
+
+
+
+
+
+
+
+#Melissa - I stopped here...
+#------------------------------------------------------------------------------
 
 #graph CPUE by site (using transect count as effort)
 # x11()
@@ -187,14 +318,14 @@ x11()
 ggplot(south.ca.sites, aes(year, CPUE.vol, color = factor(site))) +
   geom_boxplot() +
   theme(legend.position = "none")
-  labs(title = "Southern CA CPUE")
+labs(title = "Southern CA CPUE")
 
 ###############################
 
 PISCO.transect <- PISCO %>%
   subset(level %in% c("BOT", "MID")) %>%
   add_count(campus, site, year, month, day, zone, transect)
-  
+
 
 
 
@@ -216,7 +347,7 @@ year_mean_count_BMC <- PISCO %>%
 #plot for mean count (BOT and MID still combined)
 x11()
 ggplot(PISCO_mean_count, aes(year, mean, 
-                        fill=factor(campus)))+
+                             fill=factor(campus)))+
   geom_boxplot()
 
 #mean count by site
@@ -228,8 +359,8 @@ site_mean_count <- PISCO %>%
 #plot mean count by site 
 x11()
 ggplot(site_mean_count, aes(year, mean, 
-      fill=factor(campus))) + geom_boxplot() +
-      facet_wrap(~site)
+                            fill=factor(campus))) + geom_boxplot() +
+  facet_wrap(~site)
 
 #bot/mid mean total lengths
 site_mean_length <- PISCO_SPP_X %>%
@@ -239,9 +370,9 @@ site_mean_length <- PISCO_SPP_X %>%
 #plot
 x11()
 ggplot(site_mean_length, aes(year, mean_tl, 
-        fill=factor(campus))) + geom_boxplot()
+                             fill=factor(campus))) + geom_boxplot()
 
-  
+
 #canopy mean counts
 CAN_site_mean_count <- PISCO %>%
   subset(PISCO$level == c("CAN"),) %>%
@@ -264,8 +395,8 @@ CAN_site_mean_count <- PISCO_SPP_X %>%
 #for density
 #(width = 8, height = 4, units = "in", res=600, pointsize = 9)
 #ggplot(PISCO, aes(x=fish_tl, fill=factor(campus))) +
- #geom_density(alpha=0.3) +
- #xlab("Total Length [mm]")
+#geom_density(alpha=0.3) +
+#xlab("Total Length [mm]")
 #dev.off()
 # 
 # #plot by county
@@ -283,7 +414,7 @@ CAN_site_mean_count <- PISCO_SPP_X %>%
 PISCO_sites <- unique(PISCO_SPP_X$site)
 
 ggplot(PISCO_SPP_X, mapping = aes(site, fish_tl, 
-      color = factor(level))) + facet_wrap(~campus) + 
+                                  color = factor(level))) + facet_wrap(~campus) + 
   geom_boxplot()
 
 ggplot(PISCO_SPP_X, mapping = aes(site, fish_tl, 
@@ -294,9 +425,9 @@ ggplot(PISCO_SPP_X, mapping = aes(site, fish_tl,
 #view in R than facet wrapping by site)
 
 ggplot(subset(PISCO_SPP_X, site=='WESTON_DC'), mapping = aes(fish_tl, 
-      color = factor(level))) + facet_wrap(~campus) + 
+                                                             color = factor(level))) + facet_wrap(~campus) + 
   geom_boxplot()
-  
+
 
 
 #find fraction or percent of transects that saw SPP_X
@@ -363,7 +494,7 @@ PISCO.SPP_DF <- inner_join(PISCO.transect, PISCO.fish_SPP_X)
 #interest and ABSENT if not
 PISCO.SPP_DF  <- PISCO.SPP_DF  %>%  mutate(spp_present = 
                                              case_when(SPP>0 ~ 'PRESENT',
-                                                      TRUE ~ 'ABSENT'))
+                                                       TRUE ~ 'ABSENT'))
 
 dim(subset(PISCO.SPP_DF, spp_present=="PRESENT"))
 
@@ -383,9 +514,9 @@ n_sites_each_year <- PISCO.SPP_DF %>%
 
 #number of transects by site
 site_transects_n <- PISCO.SPP_DF %>%
-group_by(site) %>%
-summarise(n_transect = n_distinct(transect))
-  #remove sites with fewest years sampled
+  group_by(site) %>%
+  summarise(n_transect = n_distinct(transect))
+#remove sites with fewest years sampled
 #Finished data alterations and prep
 #-------------------------------------------------------------------------------
 
@@ -437,11 +568,11 @@ cond <- PISCO.SPP_DF$transect >= 1
 #bind to df to keep values linked
 site_yr_trsct_ct <- table(subset(PISCO.SPP_DF,
                                  select = 
-                                PISCO.SPP_DF$year,
-                                PISCO.SPP_DF$site,
-                                PISCO.SPP_DF$zone,
-                                PISCO.SPP_DF$level,
-                                PISCO.SPP_DF$cond))
+                                   PISCO.SPP_DF$year,
+                                 PISCO.SPP_DF$site,
+                                 PISCO.SPP_DF$zone,
+                                 PISCO.SPP_DF$level,
+                                 PISCO.SPP_DF$cond))
 tr_pres <- cbind(PISCO.SPP_DF, cond)
 
 #group by site
