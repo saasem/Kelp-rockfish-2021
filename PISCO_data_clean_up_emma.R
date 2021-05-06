@@ -13,13 +13,16 @@ graphics.off()
 #classcode is species column; Define species of interest here
 SPP_X = c('SATR')
 
+#species x length at maturity (cm)
+mature_l_x <- ('18')
+
 #load libraries - tidyverse loads a number of libraries
 library(tidyverse)
 library(plotly)
 
 #Set working directory - working data should be set automatically if you're 
 #using the Git version
-setwd('~/NOAA Lab Assistant/R code')
+#setwd('~/NOAA Lab Assistant/R code')
 
 
 
@@ -39,29 +42,14 @@ PISCO <- PISCO %>%  mutate(spp_present =
 #----------------------------------------------------------------------------
 #Try and find unique "transects" 
 #One row doesn't have year - remove this row
+
 PISCO <- PISCO %>%
   filter(!is.na(year)) 
 PISCO <- droplevels(PISCO)
 
-#drop years before 2001
-# PISCO <- PISCO %>%
-#   filter(year >= 2001)
 
+#create df of only spp_x
 
-
-#create a depth bin column (since depths are approx.)
-PISCO <- PISCO %>%
-  mutate(depth_bin_m = case_when(
-    (depth <= 7.4) ~ 5,
-    (depth >= 7.5 & depth <= 12.4) ~ 10,
-    (depth >= 12.5 & depth <= 17.4) ~ 15,
-    (depth >= 17.5) ~ 20))
-
-#still need to remove NAs?
-#PISCO <- PISCO[-which(is.na(
-# PISCO$campus)),]
-
-##visualize data 
 PISCO_SPP_X <- subset(PISCO, PISCO$classcode == SPP_X)
 
 #add column of SPP_X counts, set counts of other 
@@ -70,21 +58,12 @@ PISCO_SPP_X <- subset(PISCO, PISCO$classcode == SPP_X)
 PISCO$count_spp_x <- ifelse(PISCO$classcode != SPP_X, 
                             0,PISCO$count)
 
-#optional: rearrange columns to put new column next to count
-
-#PISCO <- subset(PISCO, select = c(campus:count, 
-#                   count_spp_x, fish_tl:depth_bin_m))
 
 #for kelp rf: find average number of kelp rockfish 
 #per year by campus (in BOT and MID levels)
 
-#campus_mean_count <- PISCO %>%
-# subset(PISCO$level == c("MID","BOT"),) %>%
-# group_by(year, campus) %>%
-# summarize(mean = mean(count_spp_x))
-
+#calculate transect volume. 
 #use visibility and/or 2*2*30 m transect structure
-#to estimate transect volume
 
 PISCO$vol.transect <- ifelse(PISCO$vis >= 2 | is.na(PISCO$vis), 
                              120, PISCO$vis * 60)
@@ -98,7 +77,7 @@ test.PISCO  <- PISCO %>%
   unique()
 
 #plot visibility by surge - don't get much
-bb = ggplot(test.PISCO, aes(surge, vis)) + geom_boxplot()
+bb <- ggplot(test.PISCO, aes(surge, vis)) + geom_boxplot()
 x11(); bb
 
 #a lot of missing data
@@ -108,35 +87,50 @@ summary(as.factor(test.PISCO$surge))
 #look at levels by campus and site
 with(test.PISCO, table(campus, level))
 
+#NAs in PISCO for count
+length(is.na(PISCO$count_spp_x))
+
+#set count and length to 0 for juvenile fish, so 
+#transects will still be present
+#(unsure if this is where this code should go)
+PISCO$fish_tl[PISCO$fish_tl <= mature_l_x] <- "0"
+PISCO$count_spp_x <- ifelse(PISCO$fish_tl == "0",
+                  PISCO$count_spp_x == "0",
+                  PISCO$count_spp_x)
+
+#ensure values set to 0
+testingtesting <- PISCO %>%
+  subset(PISCO$fish_tl <= mature_l_x & 
+         PISCO$spp_present == "PRESENT")
+
 #get all unique transects
 PISCOa  <- PISCO %>%
   select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy) %>%
   unique()
 with(PISCOa, table(campus,level))
 
-#get sites with canopy mid and compare the lenght distributions to canopy and mid
-cnmd.sites = subset(PISCOa, level=='CNMD' & campus=='UCSB')
-PISCOb = subset(PISCOa, site %in% cnmd.sites$site)
-PISCOb = droplevels(PISCOb)
+#get sites with canopy mid and compare the length distributions to canopy and mid
+cnmd.sites <- subset(PISCOa, level=='CNMD' & campus=='UCSB')
+PISCOb <- subset(PISCOa, site %in% cnmd.sites$site)
+PISCOb <- droplevels(PISCOb)
 with(PISCOb, table(site, level))
 
-
-#Expand the lenghts by the count rows
-#can double check the result by getting the lenght of the sum of the counts
-PISCO_SPP_X_lengths = PISCO_SPP_X %>%
+#Expand the lengths by the count rows
+#can double check the result by getting the length of the sum of the counts
+PISCO_SPP_X_lengths <- PISCO_SPP_X %>%
   uncount(weights = count, .remove=FALSE) %>%
   select(year, campus, method, month, day, site, zone, level,
          transect, classcode, fish_tl, depth)
 
 
 #plot lengths by level and campus
-cc = ggplot(PISCO_SPP_X_lengths, aes(level, fish_tl, colour=level)) + geom_boxplot() + facet_wrap(~campus)
+cc <- ggplot(PISCO_SPP_X_lengths, aes(level, fish_tl, colour=level)) + geom_boxplot() + facet_wrap(~campus)
 x11();cc
 
 #look at just the canopy mid lengths
-PISCO_SPP_X_CNMD = subset(PISCO_SPP_X_lengths, site %in% PISCOb$site & campus=="UCSB")
-PISCO_SPP_X_CNMD = droplevels(PISCO_SPP_X_CNMD)
-dd = ggplot(PISCO_SPP_X_CNMD, aes(level, fish_tl, colour=level)) + geom_boxplot() + facet_wrap(~campus)
+PISCO_SPP_X_CNMD <- subset(PISCO_SPP_X_lengths, site %in% PISCOb$site & campus=="UCSB")
+PISCO_SPP_X_CNMD <- droplevels(PISCO_SPP_X_CNMD)
+dd <- ggplot(PISCO_SPP_X_CNMD, aes(level, fish_tl, colour=level)) + geom_boxplot() + facet_wrap(~campus)
 x11();dd
 
 ##keep canopy mid - the distribution of lengths is similar to the mid
@@ -147,13 +141,13 @@ x11();dd
 ##fish were observed in that length bin
 
 
-ee = ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, fill = level)) + 
+ee <- ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, fill = level)) + 
   geom_density(alpha=0.3) + 
   facet_wrap(~campus) 
 x11();ee
 
 #look at lenght distributions of fish by level and site
-ff = ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, fill = as.factor(month))) + 
+ff <- ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, fill = as.factor(month))) + 
   geom_density(alpha=0.3) + 
   facet_wrap(~as.factor(level)) 
 x11();ff
@@ -170,7 +164,7 @@ length(unique(PISCO$site))
 length(unique(PISCO_SPP_X$site))
 
 #Remove sites that never saw specie of interest
-PISCO = droplevels(subset(PISCO, site %in% PISCO_SPP_X$site))
+PISCO <- droplevels(subset(PISCO, site %in% PISCO_SPP_X$site))
 
 #create df to combine BOT and MID counts, adding an
 #ntransect column to the paired BOT/MID
@@ -180,85 +174,120 @@ PISCO = droplevels(subset(PISCO, site %in% PISCO_SPP_X$site))
 PISCO.aggregate.transect <- PISCO %>%
   subset(level %in% c("BOT", "MID", "CNMD")) %>%
   group_by(campus, site, year, month, day, zone, transect, level) %>%
-  summarise(SATRtot = sum(count_spp_x), 
+  summarise(SATRtot = sum(count_spp_x, na.rm = T), 
             ntransect = 1, 
-            vol.transect = mean(vol.transect),
-            pctcnpy = mean(pctcnpy)) %>%
-  group_by(campus, site, year, month, day, zone, transect) %>%
-  summarise(sum.SATRtot = sum(SATRtot), sum.ntransect = sum(ntransect), 
-            sum.vol = sum(vol.transect),
-            CPUE.tr = (sum.SATRtot / sum.ntransect), 
-            CPUE.vol = (sum.SATRtot / sum.vol),
-            pctcnpy = mean(pctcnpy))
+            vol.transect = mean(vol.transect, na.rm = T),
+            pctcnpy = mean(pctcnpy, na.rm = T),
+            CPUE.tr = (SATRtot / ntransect), 
+            CPUE.vol = (SATRtot / vol.transect),
+            vis = mean(vis), na.rm = T)
+  # %>% #currently commented out to retain level separation
+  # group_by(campus, site, year, month, day, zone, transect) %>%
+  # summarise(sum.SATRtot = sum(SATRtot), sum.ntransect = sum(ntransect), 
+  #           sum.vol = sum(vol.transect),
+  #           CPUE.tr = (sum.SATRtot / sum.ntransect), 
+  #           CPUE.vol = (sum.SATRtot / sum.vol),
+  #           pctcnpy = mean(pctcnpy))
+
+#how many rows with NA vis values
+length(is.na(PISCO.aggregate.transect$vis))
+
+vis.plot.group <- PISCO.aggregate.transect %>%
+  group_by(campus, site, year, transect) %>%
+  summarise(SATRtot = sum(SATRtot),
+            vis = mean(vis))
+
+#check for NA values in vis
+length(is.na(vis.plot.group$vis))
+
+vis.plot <- ggplot(vis.plot.group, aes(vis, SATRtot, group = vis))+
+  geom_boxplot()+
+  scale_x_continuous(breaks=seq(0, 30, 0.5))
+x11(); vis.plot
 
 
 #raw average count by year, with ave CPUE and transect count columns
 PISCO.year.mean <- PISCO.aggregate.transect %>%
   group_by(year, site) %>%
-  summarize(mean.count = mean(sum.SATRtot), 
-            ntransect = sum(sum.ntransect),
-            CPUE.tr = mean(CPUE.tr), 
-            CPUE.vol = mean(CPUE.vol),
-            pctcnpy = mean(pctcnpy))
-
-
-
+  summarize(mean.count = mean(SATRtot, na.rm = T), 
+            ntransect = sum(ntransect, na.rm = T),
+            CPUE.tr = mean(CPUE.tr, na.rm = T), 
+            CPUE.vol = mean(CPUE.vol, na.rm = T),
+            pctcnpy = mean(pctcnpy), na.rm = T)
 
 
 #Look at which campuses sample which sites
 with(PISCO, table(site, campus))
 #read in pisco site table
-site.location = read.csv('PISCO_kelpforest_site_table.1.2.csv')
-sites = site.location %>%
+site.location <- read.csv('PISCO_kelpforest_site_table.1.2.csv')
+sites <- site.location %>%
   select(site, year, latitude, longitude, MPA_Name, site_designation, site_status) %>%
   unique()
 
 #add in location data
-PISCO.aggregate.transect = left_join(PISCO.aggregate.transect, sites, by=c("year", "site"))
+PISCO.aggregate.transect <- left_join(PISCO.aggregate.transect, sites, by=c("year", "site"))
 
-PISCO.aggregate.transect = PISCO.aggregate.transect %>%
+PISCO.aggregate.transect <- PISCO.aggregate.transect %>%
   mutate(Region = case_when(latitude > 34.4486 ~ "NCA",
                             TRUE ~ "SCA"))
 #make sure they were all assigned                          
 summary(as.factor(PISCO.aggregate.transect$Region))
 
+#create location groups
+#outline: OR, CA_N_1, CA_N_2, CA_S_ (group channel islands or just by lat?)
 
 #cpue by year only
-PISCO.mean <- PISCO.year.mean <- PISCO.aggregate.transect %>%
+PISCO.mean <- PISCO.aggregate.transect %>%
   group_by(year) %>%
-  summarize(mean.count = mean(sum.SATRtot), 
-            ntransect = sum(sum.ntransect),
+  summarize(mean.count = mean(SATRtot), 
+            ntransect = sum(ntransect),
             CPUE.tr = mean(CPUE.tr), 
             CPUE.vol = mean(CPUE.vol),
             pctcnpy = mean(pctcnpy))
 
 
-##Look at trends north and south of Conception
-PISCO.Region.mean = PISCO.aggregate.transect %>%
-  group_by(year, Region) %>%
-  summarize(mean.count = mean(sum.SATRtot), 
-            ntransect = sum(sum.ntransect),
-            CPUE.tr = mean(CPUE.tr), 
-            CPUE.vol = mean(CPUE.vol),
-            pctcnpy = mean(pctcnpy))
+##Look at trends north and south of Conception 
+PISCO.Region.mean <- PISCO.aggregate.transect %>%
+  group_by(Region, year, zone) %>%
+  summarize(mean.count = mean(SATRtot, na.rm = T), 
+            ntransect = sum(ntransect, na.rm = T),
+            CPUE.tr = mean(CPUE.tr, na.rm = T), 
+            CPUE.vol = mean(CPUE.vol, na.rm = T),
+            pctcnpy = mean(pctcnpy), na.rm = T)
 
-ff = ggplot(PISCO.Region.mean, aes(year, CPUE.tr, colour = Region)) + geom_line(lwd=1.5)
+ff <- ggplot(PISCO.Region.mean, aes(year, CPUE.vol, colour = zone))+
+  geom_line(lwd=1.5) +
+  facet_wrap(~Region)
 x11(); ff
+
+#MPA vs reference sites
+PISCO.Region.site.status <- PISCO.aggregate.transect %>%
+  group_by(year, Region, site_status) %>%
+  summarize(mean.count = mean(SATRtot), 
+            ntransect = sum(ntransect),
+            CPUE.tr = mean(CPUE.tr), 
+            CPUE.vol = mean(CPUE.vol),
+            pctcnpy = mean(pctcnpy))
+
+region.site.status <- ggplot(PISCO.Region.site.status, aes(year, CPUE.vol, colour = site_status))+
+  geom_line(lwd=1.5) +
+  facet_wrap(~Region)
+x11(); region.site.status
 
 
 
 ##Look at trends by level
 ##will have to make a new table for this becuase aggregate doesn't have the 
 ##levels
-PISCO.level.mean = PISCO.aggregate.transect %>%
+PISCO.level.mean <- PISCO.aggregate.transect %>%
   group_by(year, level) %>%
-  summarize(mean.count = mean(sum.SATRtot), 
-            ntransect = sum(sum.ntransect),
+  summarize(mean.count = mean(SATRtot), 
+            ntransect = sum(ntransect),
             CPUE.tr = mean(CPUE.tr), 
             CPUE.vol = mean(CPUE.vol),
             pctcnpy = mean(pctcnpy))
 
-ii = ggplot(PISCO.level.mean, aes(year, CPUE.tr, colour = level)) + geom_line(lwd=1.5)
+ii <- ggplot(PISCO.level.mean, aes(year, CPUE.tr, colour = level)) + geom_line(lwd=1.5)
 x11(); ii
 
 
@@ -266,18 +295,18 @@ x11(); ii
 #think you can do this with gather
 #First need to collapse the counts and
 
-PISCO_SPP_counts = PISCO_SPP_X %>%
+PISCO_SPP_counts <- PISCO_SPP_X %>%
   filter(level !='CAN') %>%
   group_by(year, campus, month, day, site, zone, transect, level) %>%
   summarise(SumCount = sum(count))
 
-PISCO_SPP_pairs = PISCO_SPP_counts %>%
+PISCO_SPP_pairs <- PISCO_SPP_counts %>%
   group_by(year, month, day, site, zone,  transect) %>%
   spread(level,SumCount)
 
 #plot bottom vs mid
 
-hh = ggplot(PISCO_SPP_pairs, aes(BOT, MID)) + 
+hh <- ggplot(PISCO_SPP_pairs, aes(BOT, MID)) + 
   geom_jitter(alpha=0.3)
 x11(); hh
 
@@ -320,8 +349,27 @@ ggplot(south.ca.sites, aes(year, CPUE.vol, color = factor(site))) +
   theme(legend.position = "none")
 labs(title = "Southern CA CPUE")
 
+#join swath and taxon table
+swath_classcode <- left_join(
+  read.csv('PISCO_kelpforest_swath.1.2(1).csv'),
+  read.csv('PISCO_kelpforest_taxon_table.1.2.csv')
+)
+check <- swath_classcode %>%
+  subset(sample_subtype != "INVERT", rm.na = T)
+
 ###############################
 
+#emma attempts making maps
+install.packages(c("sf", "raster", "spData", "spDataLarge", "tmap"))
+
+library(sf)
+library(raster)
+library(dplyr)
+library(spData)
+library(spDataLarge)
+
+
+###############################
 PISCO.transect <- PISCO %>%
   subset(level %in% c("BOT", "MID")) %>%
   add_count(campus, site, year, month, day, zone, transect)
