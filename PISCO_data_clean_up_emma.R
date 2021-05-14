@@ -14,7 +14,7 @@ graphics.off()
 SPP_X = c('SATR')
 
 #species x length at maturity (cm)
-mature_l_x <- ('18')
+mature_l_x <- (18) #frog
 
 #load libraries - tidyverse loads a number of libraries
 library(tidyverse)
@@ -47,88 +47,107 @@ PISCO <- PISCO %>%
   filter(!is.na(year)) 
 PISCO <- droplevels(PISCO)
 
+#frog
 #df that keeps the juvenile lengths
-PISCO.juv <- PISCO
+#PISCO.juv <- PISCO
 
 #set count and length to 0 for juvenile fish, so 
 #transects will still be present
 #(unsure if this is where this code should go)
-PISCO$fish_tl[PISCO$fish_tl <= mature_l_x] <- "0"
-PISCO$count_spp_x <- ifelse(PISCO$fish_tl == "0",
-                            PISCO$count_spp_x == "0",
-                            PISCO$count_spp_x)
-#ensure values set to 0
-testingtesting <- PISCO %>%
-  subset(PISCO$fish_tl <= mature_l_x & 
-           PISCO$spp_present == "PRESENT")
+#PISCO$fish_tl[PISCO$fish_tl <= mature_l_x] <- NA
 
+#frog
+#This will set spp_counts to 1 where it's an adult kelp rockfish - just removes
+#some extra steps; also adds in a column for juveniles
+PISCO <- PISCO %>%
+             mutate(count_spp_x = 
+             case_when((classcode==SPP_X & fish_tl>=mature_l_x) ~ 1, 
+                       TRUE ~ 0)) %>%
+             mutate(count_spp_x_juv = 
+             case_when((classcode==SPP_X & fish_tl<mature_l_x) ~ 1, 
+                     TRUE ~ 0))
+   
+#   ifelse(PISCO$fish_tl == "0",
+#                             PISCO$count_spp_x == "0",
+#                             PISCO$count_spp_x)
+# #ensure values set to 0
+# testingtesting <- PISCO %>%
+#   subset(PISCO$fish_tl <= mature_l_x & 
+#            PISCO$spp_present == "PRESENT")
+# 
 #add column of SPP_X counts, set counts of other 
 #species and empty transects to 0
 
-PISCO$count_spp_x <- ifelse(PISCO$classcode != SPP_X, 
-                            0,PISCO$count)
-PISCO.juv$count_spp_x <- ifelse(PISCO.juv$classcode != SPP_X, 
-                            0,PISCO.juv$count)
-#create df of only spp_x
+# PISCO$count_spp_x <- ifelse(PISCO$classcode != SPP_X, 
+#                             0,PISCO$count)
+# PISCO.juv$count_spp_x <- ifelse(PISCO.juv$classcode != SPP_X, 
+#                             0,PISCO.juv$count)
+# #create df of only spp_x
 
-PISCO_SPP_X <- subset(PISCO, PISCO$classcode == SPP_X)
-PISCO_SPP_X_juv <- subset(PISCO.juv, PISCO.juv$classcode == SPP_X)
+#frog
+PISCO_SPP_X <- subset(PISCO, count_spp_x==1)
+PISCO_SPP_X_juv <- subset(PISCO, count_spp_x_juv==1 )
 
 #for kelp rf: find average number of kelp rockfish 
 #per year by campus (in BOT and MID levels)
 
 #calculate transect volume. 
 #use visibility and/or 2*2*30 m transect structure
-
-PISCO$vol.transect <- "120"
-PISCO.juv$vol.transect <- "120"
+# 
+# PISCO$vol.transect <- "120"
+# PISCO.juv$vol.transect <- "120"
 
 #--------------------------------------------------------------------------------
 #Melissa script additions
 ##check to see how many transects there are
-test.PISCO  <- PISCO %>%
+PISCO_transects  <- PISCO %>%
   select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy,) %>%
   unique()
 
-test.PISCO.juv <- PISCO.juv %>%
-  select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy,) %>%
-  unique()
+# test.PISCO.juv <- PISCO.juv %>%
+#   select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy,) %>%
+#   unique()
 
 #plot visibility by surge - don't get much
-bb <- ggplot(test.PISCO, aes(surge, vis)) + geom_boxplot()
+bb <- ggplot(PISCO_transects, aes(surge, vis)) + geom_boxplot()
 x11(); bb
 
 #a lot of missing data
-summary(as.factor(test.PISCO$pctcnpy))
-summary(as.factor(test.PISCO$surge))
+summary(as.factor(PISCO_transects$pctcnpy))
+summary(as.factor(PISCO_transects$surge))
 
 #look at levels by campus and site
-with(test.PISCO, table(campus, level))
+with(PISCO_transects, table(campus, level))
 
 #NAs in PISCO for count - does this work...?
 length(is.na(PISCO$count_spp_x))
 
 #get all unique transects (check w melissa- i think
 #this might be redundant)
-PISCOa  <- PISCO %>%
-  select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy) %>%
-  unique()
-
-with(PISCOa, table(campus,level))
+#frog
+# PISCOa  <- PISCO %>%
+#   select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy) %>%
+#   unique()
+#frog - I am changing PISCOa to PISCO_transects
+with(PISCO_transects, table(campus,level))
 
 #get sites with canopy mid and compare the length 
 #distributions to canopy and mid
-cnmd.sites <- subset(PISCOa, level=='CNMD' & campus=='UCSB')
-PISCOb <- subset(PISCOa, site %in% cnmd.sites$site)
+cnmd.sites <- subset(PISCO_transects, level=='CNMD' & campus=='UCSB')
+PISCOb <- subset(PISCO_transects, site %in% cnmd.sites$site)
 PISCOb <- droplevels(PISCOb)
 with(PISCOb, table(site, level))
 
+
+
+#frog
 #Expand the lengths by the count rows
 #can double check the result by getting the length of the sum of the counts
 PISCO_SPP_X_lengths <- PISCO_SPP_X %>%
-  uncount(weights = count, .remove=FALSE) %>%
-  select(year, campus, method, month, day, site, zone, level,
-         transect, classcode, fish_tl, depth, count_spp_x)
+                       uncount(weights = count, .remove=FALSE) %>%
+                       select(year, campus, method, month, day, site, zone, 
+                              level,transect, classcode, fish_tl, depth, 
+                              count_spp_x)
 
 PISCO_SPP_X_lengths_juv <- PISCO_SPP_X_juv %>%
   uncount(weights = count, .remove=FALSE) %>%
@@ -143,7 +162,8 @@ cc <- ggplot(PISCO_SPP_X_lengths, aes(level, fish_tl, colour=level)) +
 x11();cc
 
 #plot count by level and campus
-count <- ggplot(subset(PISCO_SPP_X_lengths, level != "CAN"), aes(level, count_spp_x, colour=level)) + 
+#frog spp_length expanded so the counts are all =1
+count <- ggplot(subset(PISCO_SPP_X, level != "CAN" &), aes(level, count, colour=level)) + 
   geom_boxplot() + 
   facet_wrap(~campus)
 x11();count
@@ -173,15 +193,39 @@ ee <- ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, fill = lev
   facet_wrap(~campus) 
 x11();ee
 
+ee1 <- ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, colour = level)) + 
+  geom_freqpoly() + 
+  facet_wrap(~campus) 
+x11();ee1
+
+
 #look at length distributions of fish by level and site
 ff <- ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, fill = as.factor(month))) + 
   geom_density(alpha=0.3) + 
   facet_wrap(~as.factor(level)) 
 x11();ff
 
+
+#frog
+#look at how many samples by level
+spp_by_levels = PISCO_SPP_X %>%
+                group_by(level) %>%
+                summarise(totfish = sum(count),
+                          n_transects_present = n())
+spp_by_levels
+#look at how many samples
+transects_by_level = PISCO_transects %>%
+                     group_by(level) %>%
+                     summarise(tottransects = n())
+transects_by_level
+summary_info = cbind(spp_by_levels, transects_by_level)
+summary_info$percent_present = summary_info$n_transects_present/summary_info$tottransects
+summary_info
 #are there sites where the species was never observed?
 length(unique(PISCO$site))
 length(unique(PISCO_SPP_X$site))
+
+
 
 #Remove sites that never saw specie of interest
 PISCO <- droplevels(subset(PISCO, site %in% PISCO_SPP_X$site))
