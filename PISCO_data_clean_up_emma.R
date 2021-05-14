@@ -20,12 +20,6 @@ mature_l_x <- (18) #frog
 library(tidyverse)
 library(plotly)
 
-#Set working directory - working data should be set automatically if you're 
-#using the Git version
-#setwd('~/NOAA Lab Assistant/R code')
-
-
-
 #data is a flat file, meaning each line is an entry of a fish
 #******Update this file with the newest version*****
 PISCO <- read.csv('PISCO_kelpforest_fish.1.3(1).csv')
@@ -47,16 +41,7 @@ PISCO <- PISCO %>%
   filter(!is.na(year)) 
 PISCO <- droplevels(PISCO)
 
-#frog
-#df that keeps the juvenile lengths
-#PISCO.juv <- PISCO
 
-#set count and length to 0 for juvenile fish, so 
-#transects will still be present
-#(unsure if this is where this code should go)
-#PISCO$fish_tl[PISCO$fish_tl <= mature_l_x] <- NA
-
-#frog
 #This will set spp_counts to 1 where it's an adult kelp rockfish - just removes
 #some extra steps; also adds in a column for juveniles
 PISCO <- PISCO %>%
@@ -67,35 +52,11 @@ PISCO <- PISCO %>%
              case_when((classcode==SPP_X & fish_tl<mature_l_x) ~ 1, 
                      TRUE ~ 0))
    
-#   ifelse(PISCO$fish_tl == "0",
-#                             PISCO$count_spp_x == "0",
-#                             PISCO$count_spp_x)
-# #ensure values set to 0
-# testingtesting <- PISCO %>%
-#   subset(PISCO$fish_tl <= mature_l_x & 
-#            PISCO$spp_present == "PRESENT")
-# 
-#add column of SPP_X counts, set counts of other 
-#species and empty transects to 0
-
-# PISCO$count_spp_x <- ifelse(PISCO$classcode != SPP_X, 
-#                             0,PISCO$count)
-# PISCO.juv$count_spp_x <- ifelse(PISCO.juv$classcode != SPP_X, 
-#                             0,PISCO.juv$count)
-# #create df of only spp_x
-
 #frog
 PISCO_SPP_X <- subset(PISCO, count_spp_x==1)
 PISCO_SPP_X_juv <- subset(PISCO, count_spp_x_juv==1 )
 
-#for kelp rf: find average number of kelp rockfish 
-#per year by campus (in BOT and MID levels)
 
-#calculate transect volume. 
-#use visibility and/or 2*2*30 m transect structure
-# 
-# PISCO$vol.transect <- "120"
-# PISCO.juv$vol.transect <- "120"
 
 #--------------------------------------------------------------------------------
 #Melissa script additions
@@ -103,10 +64,6 @@ PISCO_SPP_X_juv <- subset(PISCO, count_spp_x_juv==1 )
 PISCO_transects  <- PISCO %>%
   select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy,) %>%
   unique()
-
-# test.PISCO.juv <- PISCO.juv %>%
-#   select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy,) %>%
-#   unique()
 
 #plot visibility by surge - don't get much
 bb <- ggplot(PISCO_transects, aes(surge, vis)) + geom_boxplot()
@@ -122,13 +79,7 @@ with(PISCO_transects, table(campus, level))
 #NAs in PISCO for count - does this work...?
 length(is.na(PISCO$count_spp_x))
 
-#get all unique transects (check w melissa- i think
-#this might be redundant)
-#frog
-# PISCOa  <- PISCO %>%
-#   select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy) %>%
-#   unique()
-#frog - I am changing PISCOa to PISCO_transects
+#get all unique transects 
 with(PISCO_transects, table(campus,level))
 
 #get sites with canopy mid and compare the length 
@@ -144,10 +95,9 @@ with(PISCOb, table(site, level))
 #Expand the lengths by the count rows
 #can double check the result by getting the length of the sum of the counts
 PISCO_SPP_X_lengths <- PISCO_SPP_X %>%
-                       uncount(weights = count, .remove=FALSE) %>%
-                       select(year, campus, method, month, day, site, zone, 
-                              level,transect, classcode, fish_tl, depth, 
-                              count_spp_x)
+  uncount(weights = count, .remove=FALSE) %>%
+  select(year, campus, method, month, day, site, zone, 
+  level,transect, classcode, fish_tl, depth, count_spp_x)
 
 PISCO_SPP_X_lengths_juv <- PISCO_SPP_X_juv %>%
   uncount(weights = count, .remove=FALSE) %>%
@@ -161,9 +111,15 @@ cc <- ggplot(PISCO_SPP_X_lengths, aes(level, fish_tl, colour=level)) +
   facet_wrap(~campus)
 x11();cc
 
+#plot lengths by level, zone, and campus
+zz <- ggplot(PISCO_SPP_X_lengths, aes(zone, fish_tl, colour=level)) + 
+  geom_boxplot() + 
+  facet_wrap(~campus)
+x11();zz
+
 #plot count by level and campus
 #frog spp_length expanded so the counts are all =1
-count <- ggplot(subset(PISCO_SPP_X, level != "CAN" &), aes(level, count, colour=level)) + 
+count <- ggplot(subset(PISCO_SPP_X, level != "CAN"), aes(level, count, colour=level)) + 
   geom_boxplot() + 
   facet_wrap(~campus)
 x11();count
@@ -213,6 +169,7 @@ spp_by_levels = PISCO_SPP_X %>%
                 summarise(totfish = sum(count),
                           n_transects_present = n())
 spp_by_levels
+
 #look at how many samples
 transects_by_level = PISCO_transects %>%
                      group_by(level) %>%
@@ -220,27 +177,23 @@ transects_by_level = PISCO_transects %>%
 transects_by_level
 summary_info = cbind(spp_by_levels, transects_by_level)
 summary_info$percent_present = summary_info$n_transects_present/summary_info$tottransects
-summary_info
+#write.table(summary_info, file = "summary_info.csv")
+
 #are there sites where the species was never observed?
 length(unique(PISCO$site))
 length(unique(PISCO_SPP_X$site))
-
-
 
 #Remove sites that never saw specie of interest
 PISCO <- droplevels(subset(PISCO, site %in% PISCO_SPP_X$site))
 
 #adding an effort column 
-
 PISCO.aggregate.transect <- PISCO %>%
-  subset(level %in% c("BOT", "MID", "CNMD")) %>%
+  subset(level %in% c("BOT", "MID")) %>%
   group_by(campus, site, year, month, day, zone, transect, level) %>%
   summarise(SATRtot = sum(count_spp_x, na.rm = T), 
-            ntransect = 1, 
-            vol.transect = mean(vol.transect, na.rm = T),
+            ntransect = 1,
             pctcnpy = mean(pctcnpy, na.rm = T),
             CPUE.tr = (SATRtot / ntransect), 
-            CPUE.vol = (SATRtot / vol.transect),
             vis = mean(vis), na.rm = T)
   # %>% #currently commented out to retain level separation
   # group_by(campus, site, year, month, day, zone, transect) %>%
@@ -280,7 +233,6 @@ PISCO.year.mean <- PISCO.aggregate.transect %>%
   summarize(mean.count = mean(SATRtot, na.rm = T), 
             ntransect = sum(ntransect, na.rm = T),
             CPUE.tr = mean(CPUE.tr, na.rm = T), 
-            CPUE.vol = mean(CPUE.vol, na.rm = T),
             pctcnpy = mean(pctcnpy), na.rm = T)
 
 
@@ -314,9 +266,9 @@ summary(as.factor(PISCO.aggregate.transect$Region))
 #             CPUE.vol = mean(CPUE.vol),
 #             pctcnpy = mean(pctcnpy))
 
-c.y <- ggplot(PISCO.aggregate.transect, aes(year, CPUE.vol, group = year)) +
+c.y <- ggplot(PISCO.aggregate.transect, aes(year, SATRtot, group = year)) +
   geom_boxplot()
-#x11();c.y
+x11();c.y
 
 ##Look at trends north and south of Conception 
 PISCO.Region.mean <- PISCO.aggregate.transect %>%
@@ -324,7 +276,6 @@ PISCO.Region.mean <- PISCO.aggregate.transect %>%
   summarize(count = sum(SATRtot, na.rm = T), 
             ntransect = sum(ntransect, na.rm = T),
             CPUE.tr = mean(CPUE.tr, na.rm = T), 
-            CPUE.vol = mean(CPUE.vol, na.rm = T),
             pctcnpy = mean(pctcnpy), na.rm = T)
 
 ff <- ggplot(PISCO.Region.mean, aes(year, count, colour = zone))+
@@ -337,8 +288,7 @@ PISCO.Region.site.status <- PISCO.aggregate.transect %>%
   group_by(year, Region, site_status) %>%
   summarize(count = sum(SATRtot), 
             ntransect = sum(ntransect),
-            CPUE.tr = mean(CPUE.tr), 
-            CPUE.vol = mean(CPUE.vol),
+            CPUE.tr = mean(CPUE.tr),
             pctcnpy = mean(pctcnpy))
 
 region.site.status <- ggplot(PISCO.Region.site.status, aes(year, count, colour = site_status))+
@@ -351,15 +301,14 @@ x11(); region.site.status
 ##Look at trends by level
 ##will have to make a new table for this becuase aggregate doesn't have the 
 ##levels
-PISCO.level.mean <- PISCO.aggregate.transect %>%
+PISCO.level <- PISCO.aggregate.transect %>%
   group_by(year, level) %>%
   summarize(count = sum(SATRtot), 
             ntransect = sum(ntransect),
-            CPUE.tr = mean(CPUE.tr), 
-            CPUE.vol = mean(CPUE.vol),
+            CPUE.tr = mean(CPUE.tr),
             pctcnpy = mean(pctcnpy))
 
-ii <- ggplot(PISCO.level.mean, aes(year, count, colour = level)) + geom_line(lwd=1.5)
+ii <- ggplot(PISCO.level, aes(year, count, colour = level)) + geom_line(lwd=1.5)
 x11(); ii
 
 
