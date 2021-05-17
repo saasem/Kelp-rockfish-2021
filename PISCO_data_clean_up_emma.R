@@ -117,6 +117,25 @@ zz <- ggplot(PISCO_SPP_X_lengths, aes(zone, fish_tl, colour=level)) +
   facet_wrap(~campus)
 x11();zz
 
+#plot adult lengths of canopy
+can <- ggplot(subset(PISCO_SPP_X_lengths, level = "CAN"), aes(zone, fish_tl)) + 
+  geom_boxplot() + 
+  facet_wrap(~campus)
+x11();can
+
+#plot juvenile lengths
+juv <- ggplot(PISCO_SPP_X_lengths_juv, aes(zone, fish_tl, colour=level)) + 
+  geom_boxplot() + 
+  facet_wrap(~campus)
+x11();juv
+
+#plot juvenile counts (something isn't working)
+juv_count <- ggplot(PISCO_SPP_X_lengths_juv, aes(year, count_spp_x)) + 
+  geom_line() + 
+  facet_wrap(~campus)
+
+x11();juv_count
+
 #plot count by level and campus
 #frog spp_length expanded so the counts are all =1
 count <- ggplot(subset(PISCO_SPP_X, level != "CAN"), aes(level, count, colour=level)) + 
@@ -369,17 +388,17 @@ kelp.lat <- ggplot(PISCO.aggregate.transect, aes(latitude, pctcnpy)) +
 x11();kelp.lat
 
 #cpue graph by year, subset for the s cal sites. line and boxplot and?
-x11()
-ggplot(south.ca.yr.mean, aes(year, CPUE.vol, color = factor(site))) +
-  geom_line() +
-  theme(legend.position = "none") +
-  labs(title = "Southern CA CPUE")
 
-x11()
-ggplot(south.ca.sites, aes(year, CPUE.vol, color = factor(site))) +
-  geom_boxplot() +
-  theme(legend.position = "none")
-labs(title = "Southern CA CPUE")
+# ggplot(south.ca.yr.mean, aes(year, CPUE.vol, color = factor(site))) +
+#   geom_line() +
+#   theme(legend.position = "none") +
+#   labs(title = "Southern CA CPUE")
+# 
+# 
+# ggplot(south.ca.sites, aes(year, CPUE.vol, color = factor(site))) +
+#   geom_boxplot() +
+#   theme(legend.position = "none")
+# labs(title = "Southern CA CPUE")
 
 #join swath and taxon table
 swath_classcode <- left_join(
@@ -387,7 +406,18 @@ swath_classcode <- left_join(
   read.csv('PISCO_kelpforest_taxon_table.1.2.csv')
 )
 swath_classcode <- swath_classcode %>%
-  subset(sample_subtype != "INVERT", rm.na = T)
+  subset(sample_subtype == "ALGAE", rm.na = T)
+
+#graph of algae species
+algae <- swath_classcode %>%
+  group_by(campus, year, site, zone, transect) %>%
+  summarize(count = sum(count, rm.na = T),
+            mean.size = mean(size, rm.na = T))
+
+algae_figure <- ggplot(algae, aes(zone, count)) +
+  facet_wrap(~campus)
+x11(); algae_figure
+
 
 ###############################
 
