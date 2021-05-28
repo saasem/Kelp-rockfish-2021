@@ -49,6 +49,25 @@ PISCO <- PISCO %>%
   filter(!is.na(year)) 
 PISCO <- droplevels(PISCO)
 
+##Location
+#merge location and PISCO dataframs
+PISCO <- left_join(PISCO, sites, by=c("year", "site"))
+
+PISCO <- PISCO %>%
+  mutate(Region = case_when(latitude > 34.4486 ~ "NCA",
+                            TRUE ~ "SCA"))
+
+#make sure they were all assigned                          
+summary(as.factor(PISCO$Region))
+
+#create location groups. currently: or, nca, 
+#sca_mainland, sca_ch_isl
+PISCO <- PISCO %>%
+  mutate(loc_group = case_when(
+    latitude ~ "or",
+    latitude ~ "nca",
+    latitude ~ "sca_mainland",
+    latitude ~ "sca_ch_isl"))
 
 #This will set spp_counts to 1 where it's an adult kelp rockfish - just removes
 #some extra steps; also adds in a column for juveniles
@@ -115,15 +134,6 @@ PISCO_SPP_X_lengths_juv <- PISCO_SPP_X_juv %>%
   uncount(weights = count, .remove=FALSE) %>%
   select(year, campus, method, month, day, site, zone, level,
          transect, classcode, fish_tl, depth, count_spp_x)
-
-#add location data
-PISCO_SPP_X_lengths <- left_join(PISCO_SPP_X_lengths, sites, by=c("year", "site"))
-
-PISCO_SPP_X_lengths <- PISCO_SPP_X_lengths %>%
-  mutate(Region = case_when(latitude > 34.4486 ~ "NCA",
-                            TRUE ~ "SCA"))
-#make sure they were all assigned                          
-summary(as.factor(PISCO_SPP_X_lengths$Region))
 
 #plot lengths by level and campus
 cc <- ggplot(PISCO_SPP_X_lengths, aes(level, fish_tl, colour=level)) + 
@@ -387,19 +397,28 @@ zone <- ggplot(PISCO.zone, aes(year, mean.count, colour = zone)) + geom_line(lwd
 x11(); zone
 
 
+#how do replicate transects within a zone differ
+#from one another
 
+within_zone <- PISCO.aggregate.transect %>%
+  group_by(site, year, month, day, zone, level) %>%
+  summarize(sd.count = sd(SATRtot))
+
+sd_within_zone <- ggplot(within_zone, aes(site, sd.count)) +
+  facet_wrap(~year)
+x11(); sd_within_zone
 
 ###How different are the bottom and mid paired transects in terms of counts
 #think you can do this with gather
 #First need to collapse the counts and
-
+#this is where I need to figure out the log situation
 PISCO_SPP_counts <- PISCO_SPP_X %>%
   filter(level !='CAN') %>%
   group_by(year, campus, month, day, site, zone, transect, level) %>%
-  summarise(SumCount = sum(count))
+  summarise(SumCount = log(sum(count))) #log here?
 
 PISCO_SPP_pairs <- PISCO_SPP_counts %>%
-  group_by(year, month, day, site, zone,  transect) %>%
+  group_by(year, month, day, site, zone, transect) %>%
   spread(level,SumCount)
 
 #plot bottom vs mid
@@ -408,7 +427,14 @@ hh <- ggplot(PISCO_SPP_pairs, aes(BOT, MID)) +
   geom_jitter(alpha=0.3)
 x11(); hh
 
-
+#trying this for transect relationships w/ in zones
+PISCO_SPP_zone <- PISCO_SPP_counts %>%
+  group_by(year, month, day, site, level, transect) #%>%
+  #spread(zone,SumCount)
+winzone <- ggplot(PISCO_SPP_zone, aes(year, SumCount), colour = as.factor(level)) + 
+  geom_jitter(alpha=0.3) +
+  facet_wrap(~zone)
+x11(); winzone
 
 
 
