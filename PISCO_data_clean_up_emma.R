@@ -14,7 +14,7 @@ graphics.off()
 SPP_X = c('SATR')
 
 #species x length at maturity (cm)
-mature_l_x <- (18) #frog
+mature_l_x <- (18) 
 
 #load libraries - tidyverse loads a number of libraries
 library(tidyverse)
@@ -61,13 +61,16 @@ PISCO <- PISCO %>%
 summary(as.factor(PISCO$Region))
 
 #create location groups. currently: or, nca, 
-#sca_mainland, sca_ch_isl
+#sca_mainland, sca_isl
 PISCO <- PISCO %>%
   mutate(loc_group = case_when(
-    latitude ~ "or",
-    latitude ~ "nca",
-    latitude ~ "sca_mainland",
-    latitude ~ "sca_ch_isl"))
+    latitude > 39 ~ "or",
+    latitude > 34.4486 & latitude < 39 ~ "nca",
+    latitude < 34.4486 & latitude > 34.2 & longitude > 119.2 ~ "sca_mainland",
+    latitude < 34.2 & latitude > 33.6 & longitude < 119.2 ~ "sca_mainland",
+    latitude < 34 & longitude < 118 ~ "sca_mainland",
+    latitude < 34.2 & latitude > 33.6 & longitude > 118 ~ "sca_isl",
+    latitude < 33.5 & longitude > 118 ~ "sca_isl"))
 
 #This will set spp_counts to 1 where it's an adult kelp rockfish - just removes
 #some extra steps; also adds in a column for juveniles
@@ -78,6 +81,7 @@ PISCO <- PISCO %>%
              mutate(count_spp_x_juv = 
              case_when((classcode==SPP_X & fish_tl<mature_l_x) ~ 1, 
                      TRUE ~ 0))
+
 #remove transects with <3m visibility
 PISCO <- subset(PISCO, vis >= 3)
 
@@ -285,6 +289,10 @@ PISCO.aggregate.transect <- PISCO %>%
   #           CPUE.vol = (sum.SATRtot / sum.vol),
   #           pctcnpy = mean(pctcnpy))
 
+#add in spp_present col again NEEDS EDITING
+PISCO.aggregate.transect <- PISCO.aggregate.transect %>%
+  mutate(spp_present = case_when(=>1 %in% SATRtot ~ 'PRESENT',
+                                  TRUE ~ 'ABSENT'))
 #how many rows with NA vis values
 length(is.na(PISCO.aggregate.transect$vis))
 
@@ -427,6 +435,14 @@ hh <- ggplot(PISCO_SPP_pairs, aes(BOT, MID)) +
   geom_jitter(alpha=0.3)
 x11(); hh
 
+#% of transects per site that saw at least 1 SPP_X
+#bot/mid not combined ALSO MAYBE CODE IN THE 600s
+#NEEDS EDITING
+at_least_1 <- PISCO.aggregate.transect %>%
+  group_by(year, month, day, site, level, transect)
+at_least_1 <- mutate(SPP_X_present = if_else(
+                       SATRtot = 0, F, T, missing = NULL
+                     ))
 #trying this for transect relationships w/ in zones
 PISCO_SPP_zone <- PISCO_SPP_counts %>%
   group_by(year, month, day, site, level, transect) #%>%
