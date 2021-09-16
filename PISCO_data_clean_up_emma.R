@@ -131,7 +131,7 @@ with(PISCOb, table(site, level))
 #can double check the result by getting the length of the sum of the counts
 PISCO_SPP_X_lengths <- PISCO_SPP_X %>%
   uncount(weights = count, .remove=FALSE) %>%
-  select(year, campus, method, month, day, site, zone, 
+  select(year, campus, method, month, day, site, Region, zone, 
   level,transect, classcode, fish_tl, depth, count_spp_x)
 
 PISCO_SPP_X_lengths_juv <- PISCO_SPP_X_juv %>%
@@ -381,7 +381,7 @@ x11(); region.site.status
 
 
 ##Look at trends by level
-##will have to make a new table for this becuase aggregate doesn't have the 
+##will have to make a new table for this because aggregate doesn't have the 
 ##levels
 PISCO.level <- PISCO.aggregate.transect %>%
   group_by(year, level) %>%
