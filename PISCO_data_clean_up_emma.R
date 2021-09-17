@@ -50,7 +50,7 @@ PISCO <- PISCO %>%
 PISCO <- droplevels(PISCO)
 
 ##Location
-#merge location and PISCO dataframs
+#merge location and PISCO dataframes
 PISCO <- left_join(PISCO, sites, by=c("year", "site"))
 
 PISCO <- PISCO %>%
@@ -60,17 +60,18 @@ PISCO <- PISCO %>%
 #make sure they were all assigned                          
 summary(as.factor(PISCO$Region))
 
-#create location groups. currently: or, nca, 
-#sca_mainland, sca_isl
-PISCO <- PISCO %>%
-  mutate(loc_group = case_when(
-    latitude > 39 ~ "or",
-    latitude > 34.4486 & latitude < 39 ~ "nca",
-    latitude < 34.4486 & latitude > 34.2 & longitude > 119.2 ~ "sca_mainland",
-    latitude < 34.2 & latitude > 33.6 & longitude < 119.2 ~ "sca_mainland",
-    latitude < 34 & longitude < 118 ~ "sca_mainland",
-    latitude < 34.2 & latitude > 33.6 & longitude > 118 ~ "sca_isl",
-    latitude < 33.5 & longitude > 118 ~ "sca_isl"))
+#sheep, this doesn't quite work and i'm not sure about making groups and declaring they are different populations
+# #create location groups. currently: or, nca,   
+# #sca_mainland, sca_isl
+# PISCO <- PISCO %>%
+#   mutate(loc_group = case_when(
+#     latitude > 39 ~ "or",
+#     latitude > 34.4486 & latitude < 39 ~ "nca",
+#     latitude < 34.4486 & latitude > 34.2 & longitude > 119.2 ~ "sca_mainland",
+#     latitude < 34.2 & latitude > 33.6 & longitude < 119.2 ~ "sca_mainland",
+#     latitude < 34 & longitude < 118 ~ "sca_mainland",
+#     latitude < 34.2 & latitude > 33.6 & longitude > 118 ~ "sca_isl",
+#     latitude < 33.5 & longitude > 118 ~ "sca_isl"))
 
 #This will set spp_counts to 1 where it's an adult kelp rockfish - just removes
 #some extra steps; also adds in a column for juveniles
@@ -272,7 +273,7 @@ length(unique(PISCO_SPP_X$site))
 #Remove sites that never saw specie of interest
 PISCO <- droplevels(subset(PISCO, site %in% PISCO_SPP_X$site))
 
-#adding an effort column 
+#adding an effort column #sheep, bot and mid are currently counted as 1 unit of effort for each. bot/mid still separate and not combined.
 PISCO.aggregate.transect <- PISCO %>%
   subset(level %in% c("BOT", "MID")) %>%
   group_by(campus, site, year, month, day, zone, transect, level) %>%
@@ -315,10 +316,12 @@ vis.plot <- ggplot(vis.plot.group, aes(vis, SATRtot, group = vis))+
   scale_x_continuous(breaks=seq(0, 30, 0.5))
 x11(); vis.plot
 
+#sheep, i think this is a repeat maneuver (around line 86)
 #reasonable to remove transects with <3 m vis
 PISCO.aggregate.transect <- subset(PISCO.aggregate.transect,
                                    PISCO.aggregate.transect$vis >= 3)
 
+#sheep, confirming this is treating the count values correctly (e.g. taking the mean)
 #raw average count by year, with ave CPUE and transect count columns
 PISCO.year.mean <- PISCO.aggregate.transect %>%
   group_by(year, site) %>%
@@ -327,7 +330,7 @@ PISCO.year.mean <- PISCO.aggregate.transect %>%
             CPUE.tr = mean(CPUE.tr, na.rm = T), 
             pctcnpy = mean(pctcnpy), na.rm = T)
 
-
+#sheep, note to self: this is added in at the beginning- still necessary?. i also need to add in a northern boundry if we do not wish to include oregon sites (i'll check becky's map)
 #add in location data
 PISCO.aggregate.transect <- left_join(PISCO.aggregate.transect, sites, by=c("year", "site"))
 
@@ -337,8 +340,6 @@ PISCO.aggregate.transect <- PISCO.aggregate.transect %>%
 #make sure they were all assigned                          
 summary(as.factor(PISCO.aggregate.transect$Region))
 
-#create location groups
-#outline: OR, CA_N_1, CA_N_2, CA_S_ (group channel islands or just by lat?)
 
 #cpue by year only
 # cpue.year <- PISCO.aggregate.transect %>%
@@ -435,6 +436,7 @@ hh <- ggplot(PISCO_SPP_pairs, aes(BOT, MID)) +
   geom_jitter(alpha=0.3)
 x11(); hh
 
+#sheep, i think this is already done by removing sites that never saw SPP_X earlier in the code (line 273, maybe should be much earlier?)
 #% of transects per site that saw at least 1 SPP_X
 #bot/mid not combined ALSO MAYBE CODE IN THE 600s
 #NEEDS EDITING
@@ -455,9 +457,14 @@ x11(); winzone
 
 
 
+#sheep, code below, not sure what's relevant and 
+#what's just me trying to figure things out early on
+#in the process. On the plus side, I've learned a lot
+#about what I need to do to stay organized right off
+#the bat for new projects!
 
 
-#Melissa - I stopped here...
+
 #------------------------------------------------------------------------------
 
 #graph CPUE by site (using transect count as effort)
