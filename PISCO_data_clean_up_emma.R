@@ -44,9 +44,8 @@ sites <- site.location %>%
 #----------------------------------------------------------------------------
 #Try and find unique "transects" 
 #One row doesn't have year - remove this row
-
 PISCO <- PISCO %>%
-  filter(!is.na(year)) 
+  filter(!is.na(year))
 PISCO <- droplevels(PISCO)
 
 ##Location
@@ -60,6 +59,7 @@ PISCO <- PISCO %>%
 #make sure they were all assigned                          
 summary(as.factor(PISCO$Region))
 
+#cow, I would just delete this
 #sheep, this doesn't quite work and i'm not sure about making groups and declaring they are different populations
 # #create location groups. currently: or, nca,   
 # #sca_mainland, sca_isl
@@ -73,49 +73,65 @@ summary(as.factor(PISCO$Region))
 #     latitude < 34.2 & latitude > 33.6 & longitude > 118 ~ "sca_isl",
 #     latitude < 33.5 & longitude > 118 ~ "sca_isl"))
 
+##cow - changing count_spp_x to spp_x since it's not actuall a count
 #This will set spp_counts to 1 where it's an adult kelp rockfish - just removes
 #some extra steps; also adds in a column for juveniles
 PISCO <- PISCO %>%
-             mutate(count_spp_x = 
+             mutate(spp_x = 
              case_when((classcode==SPP_X & fish_tl>=mature_l_x) ~ 1, 
                        TRUE ~ 0)) %>%
-             mutate(count_spp_x_juv = 
+             mutate(spp_x_juv = 
              case_when((classcode==SPP_X & fish_tl<mature_l_x) ~ 1, 
                      TRUE ~ 0))
 
 #remove transects with <3m visibility
 PISCO <- subset(PISCO, vis >= 3)
 
-#remove CNMD
-PISCO <- subset(PISCO, level != "CNMD")
-  
+#remove CNMD - only sampled in certain instances. All UCSB samples
+#for kelp rockfish 51 observations
+#remove canopy - mostly smaller fish and only sampled when they are expecting
+#juveniles
+PISCO <- PISCO %>%
+  filter(level %in% c("BOT","MID")) %>%
+  droplevels
+
 #create spp x dataframes
-PISCO_SPP_X <- subset(PISCO, count_spp_x==1)
-PISCO_SPP_X_juv <- subset(PISCO, count_spp_x_juv==1 )
+PISCO_SPP_X <- subset(PISCO, spp_x==1)
+PISCO_SPP_X_juv <- subset(PISCO, spp_x_juv==1 )
 
-
+#cow; for just the adult dataframe - removing the lengths
 
 #--------------------------------------------------------------------------------
 #Melissa script additions
-##check to see how many transects there are
+##check to see how many unique transects there are
+#removing surg and percent canopy since we aren't going to use them - too many NAs
 PISCO_transects  <- PISCO %>%
-  select(campus, site, year, month, day, zone, level, transect, vis, surge, pctcnpy,) %>%
+  select(campus, site, year, month, day, zone, level, transect, vis) %>% #, surge, pctcnpy
   unique()
 
+
+#-------
+#Look at missing data for surge and percent canopy and summary of the two
+#Percent canopy only recorded for canopy transects. Not sure if it can be 
+#extended to the other transects at the same site
+#A lot of missing data, so can't really use these in the modelling
 #plot visibility by surge - don't get much
 #removal of tr with <3m vis now coded earlier
-bb <- ggplot(PISCO_transects, aes(surge, vis)) + geom_boxplot()
-x11(); bb
 
-#a lot of missing data
-summary(as.factor(PISCO_transects$pctcnpy))
-summary(as.factor(PISCO_transects$surge))
+#commenting out for now
+# bb <- ggplot(PISCO_transects, aes(surge, vis)) + geom_boxplot()
+# x11(); bb
+# 
+# #a lot of missing data
+# summary(as.factor(PISCO_transects$pctcnpy))
+# summary(as.factor(PISCO_transects$surge))
+#---------
 
 #look at levels by campus and site
 with(PISCO_transects, table(campus, level))
 
 #NAs in PISCO for count - does this work...?
-length(is.na(PISCO$count_spp_x))
+#length(is.na(PISCO$spp_x))
 
 #get all unique transects 
 with(PISCO_transects, table(campus,level))
@@ -123,37 +139,43 @@ with(PISCO_transects, table(campus,level))
 #CNMD now removed earlier
 #get sites with canopy mid and compare the length 
 #distributions to canopy and mid
-cnmd.sites <- subset(PISCO_transects, level=='CNMD' & campus=='UCSB')
-PISCOb <- subset(PISCO_transects, site %in% cnmd.sites$site)
-PISCOb <- droplevels(PISCOb)
-with(PISCOb, table(site, level))
+#cow, commenting out
+# cnmd.sites <- subset(PISCO_transects, level=='CNMD' & campus=='UCSB')
+# PISCOb <- subset(PISCO_transects, site %in% cnmd.sites$site)
+# PISCOb <- droplevels(PISCOb)
+# with(PISCOb, table(site, level))
 
+#-----------------------------------------------------
 #Expand the lengths by the count rows
 #can double check the result by getting the length of the sum of the counts
 PISCO_SPP_X_lengths <- PISCO_SPP_X %>%
   uncount(weights = count, .remove=FALSE) %>%
   select(year, campus, method, month, day, site, Region, zone, 
-  level,transect, classcode, fish_tl, depth, count_spp_x)
+  level,transect, classcode, fish_tl, depth)
 
 PISCO_SPP_X_lengths_juv <- PISCO_SPP_X_juv %>%
   uncount(weights = count, .remove=FALSE) %>%
   select(year, campus, method, month, day, site, zone, level,
-         transect, classcode, fish_tl, depth, count_spp_x)
+         transect, classcode, fish_tl, depth)
 
+#------------------------------------------------------
+#PLOTTING
 #plot lengths by level and campus
-cc <- ggplot(PISCO_SPP_X_lengths, aes(level, fish_tl, colour=level)) + 
-  geom_boxplot() + 
-  facet_wrap(~campus)
-x11();cc
+# cc <- ggplot(PISCO_SPP_X_lengths, aes(level, fish_tl, colour=level)) + 
+#   geom_boxplot() + 
+#   facet_wrap(~campus)
+# x11();cc
 
-#plot lengths by level, zone, and campus
+#boxplot of lengths by level, zone, and campus
 zz <- ggplot(PISCO_SPP_X_lengths, aes(zone, fish_tl, colour=level)) + 
   geom_boxplot() + 
   facet_wrap(~campus)
 x11();zz
 
-#plot lengths over time by region
-lengths.mean <- subset(PISCO_SPP_X_lengths, level == c("MID", "BOT")) %>%
+#cow
+#Mean length over time and region
+lengths.mean <- PISCO_SPP_X_lengths %>%
+ # filter(level %in% c("MID", "BOT")) %>%
   group_by(year, Region) %>%
   summarize(mean.length = mean(fish_tl))
 
@@ -162,37 +184,41 @@ ll <- ggplot(lengths.mean, aes(year, mean.length)) +
   facet_wrap(~Region)
 x11();ll
 
-#plot adult lengths of canopy
-can <- ggplot(subset(PISCO_SPP_X_lengths, level = "CAN"), aes(zone, fish_tl)) + 
-  geom_boxplot() + 
-  facet_wrap(~campus)
-x11();can
+# #plot adult lengths of canopy
+# can <- ggplot(subset(PISCO_SPP_X_lengths, level = "CAN"), aes(zone, fish_tl)) + 
+#   geom_boxplot() + 
+#   facet_wrap(~campus)
+# x11();can
 
-#plot juvenile lengths
-juv <- ggplot(PISCO_SPP_X_lengths_juv, aes(zone, fish_tl, colour=level)) + 
-  geom_boxplot() + 
-  facet_wrap(~campus)
-x11();juv
+#cow, just comment out since we're using only adults
+# #plot juvenile lengths
+# juv <- ggplot(PISCO_SPP_X_lengths_juv, aes(zone, fish_tl, colour=level)) + 
+#   geom_boxplot() + 
+#   facet_wrap(~campus)
+# x11();juv
+# 
+# #plot juvenile counts (something isn't working)
+# juv_count <- ggplot(PISCO_SPP_X_lengths_juv, aes(year, spp_x)) + 
+#   geom_line() + 
+#   facet_wrap(~campus)
+# 
+# x11();juv_count
+#------------------------------------------------------
 
-#plot juvenile counts (something isn't working)
-juv_count <- ggplot(PISCO_SPP_X_lengths_juv, aes(year, count_spp_x)) + 
-  geom_line() + 
-  facet_wrap(~campus)
-
-x11();juv_count
-
+#cow, commented out since not really useful
 #plot count by level and campus
 #frog spp_length expanded so the counts are all =1
-count <- ggplot(subset(PISCO_SPP_X, level != "CAN"), aes(level, count, colour=level)) + 
-  geom_boxplot() + 
-  facet_wrap(~campus)
-x11();count
+# count <- ggplot(subset(PISCO_SPP_X, level != "CAN"), aes(level, count, colour=level)) + 
+#   geom_boxplot() + 
+#   facet_wrap(~campus)
+# x11();count
 
-#look at just the canopy mid lengths
-PISCO_SPP_X_CNMD <- subset(PISCO_SPP_X_lengths, site %in% PISCOb$site & campus=="UCSB")
-PISCO_SPP_X_CNMD <- droplevels(PISCO_SPP_X_CNMD)
-dd <- ggplot(PISCO_SPP_X_CNMD, aes(level, fish_tl, colour=level)) + geom_boxplot() + facet_wrap(~campus)
-x11();dd
+#cow - commented out since we remove these
+# #look at just the canopy mid lengths
+# PISCO_SPP_X_CNMD <- subset(PISCO_SPP_X_lengths, site %in% PISCOb$site & campus=="UCSB")
+# PISCO_SPP_X_CNMD <- droplevels(PISCO_SPP_X_CNMD)
+# dd <- ggplot(PISCO_SPP_X_CNMD, aes(level, fish_tl, colour=level)) + geom_boxplot() + facet_wrap(~campus)
+# x11();dd
 
 #look at juvenile lengths
 jj <- ggplot(PISCO_SPP_X_lengths_juv, aes(level, fish_tl, colour=level)) + 
@@ -207,23 +233,24 @@ x11();jj
 #in each level by surge category 
 #(defs can be simplified, not yet sure how)
 
-surge_level <- PISCO_SPP_X %>%
-  group_by(surge, level) %>%
-  summarize(mean.count = mean(count, rm.na= T))
-
-proportion_surge <- surge_level %>%
-  summarize(sum.mean.count = sum(mean.count))
-
-x <- left_join(surge_level, proportion_surge)
-
-final_surge <- x %>%
-  group_by(surge, level) %>%
-  summarize(mean.count = mean.count,
-            sum.mean.count = sum.mean.count,
-            prop = mean.count/sum.mean.count)
-
-#(table doesn't work yet)
-with(final_surge, table(surge, level))
+#cow - removing for now
+# surge_level <- PISCO_SPP_X %>%
+#   group_by(surge, level) %>%
+#   summarize(mean.count = mean(count, rm.na= T))
+# 
+# proportion_surge <- surge_level %>%
+#   summarize(sum.mean.count = sum(mean.count))
+# 
+# x <- left_join(surge_level, proportion_surge)
+# 
+# final_surge <- x %>%
+#   group_by(surge, level) %>%
+#   summarize(mean.count = mean.count,
+#             sum.mean.count = sum.mean.count,
+#             prop = mean.count/sum.mean.count)
+# 
+# #(table doesn't work yet)
+# with(final_surge, table(surge, level))
 
 
 #look at length distributions of fish by level and site
@@ -231,12 +258,12 @@ with(final_surge, table(surge, level))
 ##fish were observed in that length bin
 
 
-ee <- ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, fill = level)) + 
+ee <- ggplot(PISCO_SPP_X_lengths, aes(fish_tl, fill = level)) + 
   geom_density(alpha=0.3) + 
   facet_wrap(~campus) 
 x11();ee
 
-ee1 <- ggplot(subset(PISCO_SPP_X_lengths, level !='CAN'), aes(fish_tl, colour = level)) + 
+ee1 <- ggplot(PISCO_SPP_X_lengths, aes(fish_tl, colour = level)) + 
   geom_freqpoly() + 
   facet_wrap(~campus) 
 x11();ee1
@@ -264,6 +291,7 @@ transects_by_level = PISCO_transects %>%
 transects_by_level
 summary_info = cbind(spp_by_levels, transects_by_level)
 summary_info$percent_present = summary_info$n_transects_present/summary_info$tottransects
+summary_info
 #write.table(summary_info, file = "summary_info.csv")
 
 #are there sites where the species was never observed?
@@ -273,15 +301,17 @@ length(unique(PISCO_SPP_X$site))
 #Remove sites that never saw specie of interest
 PISCO <- droplevels(subset(PISCO, site %in% PISCO_SPP_X$site))
 
-#adding an effort column #sheep, bot and mid are currently counted as 1 unit of effort for each. bot/mid still separate and not combined.
+#adding an effort column 
+#sheep, bot and mid are currently counted as 1 unit of effort for each. 
+#bot/mid still separate and not combined.
 PISCO.aggregate.transect <- PISCO %>%
-  subset(level %in% c("BOT", "MID")) %>%
-  group_by(campus, site, year, month, day, zone, transect, level) %>%
-  summarise(SATRtot = sum(count_spp_x, na.rm = T), 
-            ntransect = 1,
-            pctcnpy = mean(pctcnpy, na.rm = T),
-            CPUE.tr = (SATRtot / ntransect), 
-            vis = mean(vis), na.rm = T)
+#  subset(level %in% c("BOT", "MID")) %>% ##did this earlier in script
+  group_by(campus, site, year, month, day, zone, level) %>%
+  summarise(SATRtot = sum(spp_x, na.rm =T), 
+             ntransect = n_distinct(transect),
+        #    pctcnpy = mean(pctcnpy, na.rm = T),
+        #    CPUE.tr = (SATRtot / ntransect), 
+            vis = mean(vis))
   # %>% #currently commented out to retain level separation
   # group_by(campus, site, year, month, day, zone, transect) %>%
   # summarise(sum.SATRtot = sum(SATRtot), sum.ntransect = sum(ntransect), 
@@ -290,10 +320,11 @@ PISCO.aggregate.transect <- PISCO %>%
   #           CPUE.vol = (sum.SATRtot / sum.vol),
   #           pctcnpy = mean(pctcnpy))
 
+#cow- commented out
 #add in spp_present col again NEEDS EDITING
-PISCO.aggregate.transect <- PISCO.aggregate.transect %>%
-  mutate(spp_present = case_when(=>1 %in% SATRtot ~ 'PRESENT',
-                                  TRUE ~ 'ABSENT'))
+#PISCO.aggregate.transect <- PISCO.aggregate.transect %>%
+#  mutate(spp_present = case_when(=>1 %in% SATRtot ~ 'PRESENT',
+#                                  TRUE ~ 'ABSENT'))
 #how many rows with NA vis values
 length(is.na(PISCO.aggregate.transect$vis))
 
@@ -547,17 +578,17 @@ PISCO.transect <- PISCO %>%
 year_mean_count_BM <- PISCO %>%
   subset(PISCO$level == c("MID","BOT"),) %>%
   group_by(year) %>%
-  summarize(mean = mean(count_spp_x))
+  summarize(mean = mean(spp_x))
 
 year_mean_count_C <- PISCO %>%
   subset(PISCO$level == c("CAN"),) %>%
   group_by(year) %>%
-  summarize(mean = mean(count_spp_x))
+  summarize(mean = mean(spp_x))
 
 year_mean_count_BMC <- PISCO %>%
   subset(PISCO$level == c("MID","BOT","CAN"),) %>%
   group_by(year) %>%
-  summarize(mean = mean(count_spp_x))
+  summarize(mean = mean(spp_x))
 
 #plot for mean count (BOT and MID still combined)
 x11()
@@ -569,7 +600,7 @@ ggplot(PISCO_mean_count, aes(year, mean,
 site_mean_count <- PISCO %>%
   subset(PISCO$level == c("MID","BOT"),) %>%
   group_by(year, site,campus) %>%
-  summarize(mean = mean(count_spp_x))
+  summarize(mean = mean(spp_x))
 
 #plot mean count by site 
 x11()
@@ -592,7 +623,7 @@ ggplot(site_mean_length, aes(year, mean_tl,
 CAN_site_mean_count <- PISCO %>%
   subset(PISCO$level == c("CAN"),) %>%
   group_by(year, site, campus) %>%
-  summarize(mean = mean(count_spp_x))
+  summarize(mean = mean(spp_x))
 
 #canopy mean total lengths
 CAN_site_mean_count <- PISCO_SPP_X %>%
